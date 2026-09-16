@@ -1,0 +1,47 @@
+name: Verify Google resource schema fix
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12']
+    env:
+      MCP_USE_ANONYMIZED_TELEMETRY: 'false'
+    defaults:
+      run:
+        working-directory: libraries/python
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: eb0d744e5b7a731d4d749feb0d11b84997aff48b
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.11.3'
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - name: Install dependencies including optional Google adapter SDK
+        run: |
+          uv venv --python "$UV_PYTHON"
+          uv pip install -e '.[dev,anthropic,openai,search,e2b]' google-genai==2.23.0
+      - name: Verify exact contribution and all Python unit tests
+        run: |
+          test "$(git rev-parse HEAD)" = 'eb0d744e5b7a731d4d749feb0d11b84997aff48b'
+          .venv/bin/python -m pytest tests/unit -q --junitxml=unit-results.xml
+          .venv/bin/python - <<'PY'
+          import xml.etree.ElementTree as ET
+          cases = [case for case in ET.parse('unit-results.xml').iter('testcase') if 'test_google_adapter' in case.get('classname', '')]
+          assert len(cases) == 3, f'Expected three Google adapter tests, found {len(cases)}'
+          assert all(case.find('skipped') is None for case in cases), 'Google adapter tests must execute, not skip'
+          print('All three Google adapter tests executed successfully')
+          PY
+      - name: Check CI-pinned lint and format
+        run: |
+          uv pip install ruff==0.15.22
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
