@@ -1,0 +1,43 @@
+name: Verify WebSocket cancellation fix
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12']
+        dependencies: [latest, minimum]
+    env:
+      MCP_USE_ANONYMIZED_TELEMETRY: 'false'
+    defaults:
+      run:
+        working-directory: libraries/python
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: 8ab38c8548f80526d2d39530518682e078a7e3d4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: '0.11.3'
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - name: Install latest dependencies
+        if: matrix.dependencies == 'latest'
+        run: uv pip install --system -e '.[dev,anthropic,openai,search,e2b]'
+      - name: Install minimum direct dependencies
+        if: matrix.dependencies == 'minimum'
+        run: uv pip install --system -e '.[dev,anthropic,openai,search,e2b]' --resolution lowest-direct
+      - name: Verify exact contribution
+        run: |
+          test "$(git rev-parse HEAD)" = '8ab38c8548f80526d2d39530518682e078a7e3d4'
+          pytest tests/unit -q
+      - name: Check CI-pinned lint and format
+        run: |
+          uv pip install --system ruff==0.15.22
+          ruff check .
+          ruff format --check .
