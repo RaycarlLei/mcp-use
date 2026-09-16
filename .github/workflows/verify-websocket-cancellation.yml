@@ -26,18 +26,20 @@ jobs:
           version: '0.11.3'
           python-version: ${{ matrix.python }}
           enable-cache: false
+      - name: Create isolated Python environment
+        run: uv venv --python "$UV_PYTHON"
       - name: Install latest dependencies
         if: matrix.dependencies == 'latest'
-        run: uv pip install --system -e '.[dev,anthropic,openai,search,e2b]'
+        run: uv pip install -e '.[dev,anthropic,openai,search,e2b]'
       - name: Install minimum direct dependencies
         if: matrix.dependencies == 'minimum'
-        run: uv pip install --system -e '.[dev,anthropic,openai,search,e2b]' --resolution lowest-direct
+        run: uv pip install -e '.[dev,anthropic,openai,search,e2b]' --resolution lowest-direct
       - name: Verify exact contribution
         run: |
           test "$(git rev-parse HEAD)" = '8ab38c8548f80526d2d39530518682e078a7e3d4'
-          pytest tests/unit -q
+          .venv/bin/python -m pytest tests/unit -q
       - name: Check CI-pinned lint and format
         run: |
-          uv pip install --system ruff==0.15.22
-          ruff check .
-          ruff format --check .
+          uv pip install ruff==0.15.22
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
